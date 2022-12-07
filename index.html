@@ -1,0 +1,150 @@
+<html>
+    <head>
+        <title>Artblocks TESTNET generator</title>
+
+        <meta charset="utf-8">
+    
+        <style type="text/css">
+            body {
+              margin: 0;
+              padding: 0;
+            }
+            canvas {
+              padding: 0;
+              margin: auto;
+              display: block;
+              position: absolute;
+              top: 0;
+              bottom: 0;
+              left: 0;
+              right: 0;
+            }
+        </style>
+
+        <script>
+            const myHeaders = new Headers();
+            myHeaders.append("accept", "*/*");
+            myHeaders.append("accept-language", "en-US");
+            myHeaders.append("content-type", "application/json");
+            myHeaders.append("sec-fetch-dest", "empty");
+            myHeaders.append("sec-fetch-mode", "cors");
+            myHeaders.append("sec-fetch-site", "cross-site");
+
+            let tokenIdToRender = '200003357'
+
+            const params = new Proxy(new URLSearchParams(window.location.search), {
+                get: (searchParams, prop) => searchParams.get(prop),
+            })
+
+            if(params?.tokenid) {
+                tokenIdToRender = params.tokenid
+            }
+
+            const raw = JSON.stringify({
+                'query': `{ 
+                    tokens(where: {
+                        tokenId: "${tokenIdToRender}", 
+                        contract_in: ["0x1cd623a86751d4c4f20c96000fec763941f098a2"]
+                    }) { 
+                        project { 
+                            scriptJSON 
+                            script 
+                            contract { 
+                            id 
+                        } 
+                    } 
+                        tokenId 
+                        hash 
+                    } 
+                }`});
+
+            const requestOptions = {
+                method: 'POST',
+                headers: myHeaders,
+                body: raw,
+                redirect: 'follow'
+            };
+
+            const loadScript = (hash, tokenId, script, type) => {
+                document.querySelector('#loading').style.display = 'none'
+
+                const tokenData = document.createElement('script')
+                tokenData.innerHTML = `
+                    let tokenData = {
+                        "hash": "${hash}", 
+                        "tokenId":"${tokenId}"
+                    }
+                `
+                document.body.appendChild(tokenData)
+
+                const tokenScript = document.createElement('script')
+                tokenScript.innerHTML = script
+                document.body.appendChild(tokenScript)
+
+                switch(type) {
+                    case 'p5js': {
+                        const extraScript = document.createElement('script')
+                        extraScript.innerHTML = 'new p5();'
+                        document.body.appendChild(extraScript)
+                        break
+                    }
+                }
+            }
+
+            fetch("https://api.thegraph.com/subgraphs/name/artblocks/art-blocks-artist-staging", requestOptions)
+                .then(response => response.json())
+                .then(result => {
+                    try {
+                        const { tokens } = result.data
+                        const { hash, project, tokenId } = tokens[0]
+                        const { contract, script, scriptJSON } = project
+                        const projectSettings = JSON.parse(scriptJSON)
+                        const { type } = projectSettings
+
+                        console.log(projectSettings)
+                        
+                        const dependencyScript = document.createElement('script')
+
+                        switch(type) {
+                            case 'a-frame': {
+                                dependencyScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js'
+                                break
+                            }
+                            case 'p5js': {
+                                dependencyScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.0.0/p5.min.js'
+                                break
+                            }
+                            case 'regl': {
+                                dependencyScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/regl/2.1.0/regl.min.js'
+                                break
+                            }
+                            case 'default': {
+                                loadScript(hash, tokenId, script, type)
+                                break
+                            }
+                            default: {
+                                break;
+                            }
+                        }
+
+                        document.head.appendChild(dependencyScript)
+
+                        dependencyScript.addEventListener('load', function() {
+                            loadScript(hash, tokenId, script, type)
+                        })
+                    } catch(e) {
+                        console.log(e)
+
+                        document.querySelector('#loading').innerHTML = e.toString()
+                        document.querySelector('#loading').innerHTML += '<hr />'
+                        document.querySelector('#loading').innerHTML += `token id: ${tokenIdToRender}`
+                    }
+                })
+                .catch(error => console.log('error', error));
+        </script>
+    </head>
+
+    <body>
+        <div id="loading">Loading..</div>
+    </body>
+</html>
